@@ -5,6 +5,27 @@ import { toast } from "react-toastify";
 import axios from "axios";
 import { useState } from "react";
 
+const dayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const defaultWeeklySchedule = dayLabels.map((_, day) => ({
+  day,
+  isOpen: day !== 0,
+  startTime: "10:00",
+  endTime: "21:00",
+  slotDuration: 30,
+}));
+
+const normalizeWeeklySchedule = (weeklySchedule) => {
+  if (!Array.isArray(weeklySchedule) || weeklySchedule.length !== 7) {
+    return defaultWeeklySchedule;
+  }
+
+  return defaultWeeklySchedule.map((defaultDay) => ({
+    ...defaultDay,
+    ...weeklySchedule.find((item) => Number(item.day) === defaultDay.day),
+  }));
+};
+
 const DoctorProfile = () => {
   const { dToken, profileData, setProfileData, getProfileData, backendUrl } =
     useContext(DoctorContext);
@@ -23,6 +44,7 @@ const DoctorProfile = () => {
         address: profileData.address,
         fees: profileData.fees,
         available: profileData.available,
+        weeklySchedule: normalizeWeeklySchedule(profileData.weeklySchedule),
       };
 
       const { data } = await axios.post(
@@ -33,7 +55,7 @@ const DoctorProfile = () => {
       if (data.success) {
         toast.success(data.message);
         setIsEdit(false);
-        getProfileData;
+        getProfileData();
       } else {
         toast.error(data.message);
       }
@@ -42,6 +64,17 @@ const DoctorProfile = () => {
       toast.error(error?.message);
     }
   };
+
+  const updateScheduleDay = (day, field, value) => {
+    setProfileData((prev) => {
+      const weeklySchedule = normalizeWeeklySchedule(prev.weeklySchedule).map((item) =>
+        item.day === day ? { ...item, [field]: value } : item
+      );
+
+      return { ...prev, weeklySchedule };
+    });
+  };
+
   return (
     profileData && (
       <div>
@@ -147,6 +180,78 @@ const DoctorProfile = () => {
                 type="checkbox"
               />
               <label htmlFor="">Available</label>
+            </div>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <div>
+                <p className="text-lg font-medium text-gray-700">Weekly schedule</p>
+                <p className="text-sm text-gray-500">
+                  Set the days and times patients can book appointments.
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                {normalizeWeeklySchedule(profileData.weeklySchedule).map((daySchedule) => (
+                  <div
+                    key={daySchedule.day}
+                    className="grid gap-3 rounded-lg border border-gray-200 p-3 md:grid-cols-[120px_90px_1fr_1fr_120px]"
+                  >
+                    <p className="font-medium text-gray-700">
+                      {dayLabels[daySchedule.day]}
+                    </p>
+
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={daySchedule.isOpen}
+                        disabled={!isEdit}
+                        onChange={(e) =>
+                          updateScheduleDay(daySchedule.day, "isOpen", e.target.checked)
+                        }
+                      />
+                      Open
+                    </label>
+
+                    <input
+                      type="time"
+                      value={daySchedule.startTime}
+                      disabled={!isEdit || !daySchedule.isOpen}
+                      onChange={(e) =>
+                        updateScheduleDay(daySchedule.day, "startTime", e.target.value)
+                      }
+                      className="rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
+                    />
+
+                    <input
+                      type="time"
+                      value={daySchedule.endTime}
+                      disabled={!isEdit || !daySchedule.isOpen}
+                      onChange={(e) =>
+                        updateScheduleDay(daySchedule.day, "endTime", e.target.value)
+                      }
+                      className="rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
+                    />
+
+                    <select
+                      value={daySchedule.slotDuration}
+                      disabled={!isEdit || !daySchedule.isOpen}
+                      onChange={(e) =>
+                        updateScheduleDay(
+                          daySchedule.day,
+                          "slotDuration",
+                          Number(e.target.value)
+                        )
+                      }
+                      className="rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
+                    >
+                      <option value={15}>15 min</option>
+                      <option value={30}>30 min</option>
+                      <option value={45}>45 min</option>
+                      <option value={60}>60 min</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {isEdit ? (

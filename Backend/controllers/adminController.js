@@ -14,12 +14,15 @@ const addDoctor = async (req, res) => {
       password,
       speciality,
       degree,
+      registrationNumber,
       experience,
       about,
       fees,
       address,
+      city,
     } = req.body;
-    const imageFile = req.file;
+    const imageFile = req.files?.image?.[0];
+    const licenseFile = req.files?.licenseDocument?.[0];
 
     //checking for all data to add doctor
     if (
@@ -28,10 +31,13 @@ const addDoctor = async (req, res) => {
       !password ||
       !speciality ||
       !degree ||
+      !registrationNumber ||
       !experience ||
       !about ||
       !fees ||
-      !address
+      !address ||
+      !imageFile ||
+      !licenseFile
     ) {
       return res.json({ success: false, message: "missing details" });
     }
@@ -76,6 +82,10 @@ const addDoctor = async (req, res) => {
     });
 
     const imageUrl = imageUpload.secure_url;
+    const licenseUpload = await cloudinary.uploader.upload(licenseFile.path, {
+      resource_type: "auto",
+    });
+    const licenseDocumentUrl = licenseUpload.secure_url;
 
     const doctorData = {
       name,
@@ -84,11 +94,15 @@ const addDoctor = async (req, res) => {
       password: hashedPassword,
       speciality,
       degree,
+      registrationNumber,
+      licenseDocument: licenseDocumentUrl,
       experience,
       about,
       fees,
       address: JSON.parse(address),
+      city: city || "",
       date: Date.now(),
+      verificationStatus: "pending",
     };
 
     const newDoctor = new doctorModel(doctorData);
@@ -135,6 +149,34 @@ const allDoctors = async (req, res) => {
   }
 };
 
+// API for admin to verify or reject a doctor
+const updateDoctorVerification = async (req, res) => {
+  try {
+    const { docId, verificationStatus, verificationNotes } = req.body;
+
+    if (!["pending", "verified", "rejected"].includes(verificationStatus)) {
+      return res.json({ success: false, message: "Invalid verification status" });
+    }
+
+    const doctor = await doctorModel.findById(docId);
+
+    if (!doctor) {
+      return res.json({ success: false, message: "Doctor not found" });
+    }
+
+    await doctorModel.findByIdAndUpdate(docId, {
+      verificationStatus,
+      verificationNotes: verificationNotes || "",
+      available: verificationStatus === "verified" ? doctor.available : false,
+    });
+
+    res.json({ success: true, message: `Doctor marked as ${verificationStatus}` });
+  } catch (error) {
+    console.log("error:", error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 // API to get all appointments list
 const appointmentsAdmin = async (req, res) => {
   try {
@@ -153,8 +195,27 @@ const appointmentCancel = async (req, res) => {
     const { appointmentId } = req.body;
     const appointmentData = await appointmentModel.findById(appointmentId);
 
+    if (!appointmentData) {
+      return res.json({ success: false, message: "Appointment not found" });
+    }
+
+    if (appointmentData.cancelled) {
+      return res.json({ success: false, message: "Appointment already cancelled" });
+    }
+
+    if (appointmentData.isCompleted) {
+      return res.json({
+        success: false,
+        message: "Completed appointments cannot be cancelled",
+      });
+    }
+
     await appointmentModel.findByIdAndUpdate(appointmentId, {
       cancelled: true,
+      cancelledBy: "system",
+      refund: appointmentData.payment,
+      refundAmount: appointmentData.payment ? appointmentData.amount : 0,
+      notification: "Appointment cancelled by admin. Please book a new slot.",
     });
 
     // releaseing doctor slot
@@ -235,4 +296,5 @@ export {
   appointmentsAdmin,
   appointmentCancel,
   adminDashboard,
+  updateDoctorVerification,
 };

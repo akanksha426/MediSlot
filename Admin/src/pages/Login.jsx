@@ -24,8 +24,15 @@ const Login = () => {
         );
 
         if (data.success) {
+          // 🔥 REMOVE DOCTOR TOKEN (ROLE SWITCH FIX)
+          localStorage.removeItem("dToken");
+
+          // ✅ SAVE ADMIN TOKEN
           localStorage.setItem("aToken", data.token);
           setAToken(data.token);
+
+          // 🔥 REDIRECT TO ADMIN WELCOME PAGE
+          window.location.replace("/");
         } else {
           toast.error(data.message);
         }
@@ -36,8 +43,15 @@ const Login = () => {
         );
 
         if (data.success) {
+          // 🔥 REMOVE ADMIN TOKEN (ROLE SWITCH FIX)
+          localStorage.removeItem("aToken");
+
+          // ✅ SAVE DOCTOR TOKEN
           localStorage.setItem("dToken", data.token);
           setDToken(data.token);
+
+          // 🔥 REDIRECT TO DOCTOR DASHBOARD
+          window.location.replace("/");
         } else {
           toast.error(data.message);
         }
@@ -49,7 +63,6 @@ const Login = () => {
 
   return (
     <section className="min-h-screen flex items-center justify-center bg-white px-6">
-
       <div className="w-full max-w-md bg-gray-900 text-white rounded-2xl p-8 shadow-2xl">
 
         {/* Toggle Tabs */}
@@ -85,6 +98,7 @@ const Login = () => {
 
         <form onSubmit={onSubmitHandler} className="space-y-4">
 
+          {/* Email */}
           <div>
             <label className="text-sm text-gray-300">Email</label>
             <input
@@ -96,6 +110,7 @@ const Login = () => {
             />
           </div>
 
+          {/* Password */}
           <div className="relative">
             <label className="text-sm text-gray-300">Password</label>
             <input
@@ -115,6 +130,7 @@ const Login = () => {
             </button>
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
             className="w-full bg-white text-gray-900 font-semibold py-3 rounded-xl hover:scale-105 transition-all duration-300 shadow-md"

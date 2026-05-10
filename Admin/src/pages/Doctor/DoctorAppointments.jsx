@@ -4,6 +4,9 @@ import { AppContext } from "../../context/AppContext";
 import { assets } from "../../assets/assets";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { io } from "socket.io-client";
+
+const socket = io("http://localhost:4000");
 
 const DoctorAppointments = () => {
   const {
@@ -13,10 +16,21 @@ const DoctorAppointments = () => {
     completeAppointment,
     cancelAppointment,
     backendUrl,
+    doctorId,
   } = useContext(DoctorContext);
 
-  const { calculateAge, slotDateFormat, currency } =
-    useContext(AppContext);
+  const { calculateAge, slotDateFormat, currency } = useContext(AppContext);
+
+  useEffect(() => {
+    if (!doctorId) return;
+
+    socket.emit("joinDoctor", doctorId);
+    socket.on("slotUpdated", getAppointments);
+
+    return () => {
+      socket.off("slotUpdated", getAppointments);
+    };
+  }, [doctorId, getAppointments]);
 
   useEffect(() => {
     if (dToken) {
@@ -24,12 +38,9 @@ const DoctorAppointments = () => {
     }
   }, [dToken]);
 
-  // ✅ DELETE FUNCTION
   const deleteAppointment = async (appointmentId) => {
     try {
-      const confirmDelete = window.confirm(
-        "Delete this appointment?"
-      );
+      const confirmDelete = window.confirm("Delete this appointment?");
       if (!confirmDelete) return;
 
       const { data } = await axios.post(
@@ -45,133 +56,167 @@ const DoctorAppointments = () => {
         toast.error(data.message);
       }
     } catch (error) {
-      console.log(error);
       toast.error("Delete failed");
     }
   };
 
-  return (
-    <div className="w-full max-w-6xl m-5">
-      <p className="mb-3 text-lg font-medium">
-        All Appointments
-      </p>
+  const renderStatus = (item) => {
+    if (item.cancelled) {
+      return (
+        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">
+          {item.cancelledBy === "doctor" ? "Cancelled by doctor" : "Cancelled"}
+        </span>
+      );
+    }
 
-      <div className="bg-white border rounded text-sm max-h-[80vh] min-h-[50vh] overflow-y-scroll">
+    if (item.isCompleted) {
+      return (
+        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+          Completed
+        </span>
+      );
+    }
 
-        {/* Header */}
-        <div className="max-sm:hidden grid grid-cols-[0.5fr_2fr_1fr_1fr_3fr_1fr_1fr] gap-1 py-3 px-6 border-b font-medium text-gray-700">
-          <p>Sr no.</p>
-          <p>Patient</p>
-          <p>Payment</p>
-          <p>Age</p>
-          <p>Date & Time</p>
-          <p>Fees</p>
-          <p>Action</p>
-        </div>
+    return (
+      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+        Pending
+      </span>
+    );
+  };
 
-        {/* Data */}
-        {appointments.map((item, index) => (
-          <div
-            key={index}
-            className="flex flex-wrap justify-between max-sm:gap-5 max-sm:text-base sm:grid grid-cols-[0.5fr_2fr_1fr_1fr_3fr_1fr_1fr] gap-1 items-center text-gray-500 py-3 px-6 border-b hover:bg-gray-50 transition"
+  const renderActions = (item) => {
+    if (!item.cancelled && !item.isCompleted) {
+      return (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => cancelAppointment(item._id)}
+            className="rounded-lg border border-rose-200 bg-rose-50 p-2 transition hover:bg-rose-100"
+            title="Cancel appointment"
           >
-            <p className="max-sm:hidden">{index + 1}</p>
+            <img className="h-4 w-4" src={assets.cancel_icon} alt="Cancel" />
+          </button>
+          <button
+            type="button"
+            onClick={() => completeAppointment(item._id)}
+            className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 transition hover:bg-emerald-100"
+            title="Mark complete"
+          >
+            <img className="h-4 w-4" src={assets.tick_icon} alt="Complete" />
+          </button>
+        </div>
+      );
+    }
 
-            {/* Patient */}
-            <div className="flex items-center gap-2">
-              <img
-                className="w-8 rounded-full"
-                src={item?.userData?.image}
-                alt=""
-              />
-              <p>{item?.userData?.name}</p>
-            </div>
+    return (
+      <button
+        type="button"
+        onClick={() => deleteAppointment(item._id)}
+        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+      >
+        Delete
+      </button>
+    );
+  };
 
-            {/* Payment */}
-            <div>
-              <p className="text-xs inline border border-primary px-2 rounded-full">
-                {item.payment ? "Online" : "CASH"}
-              </p>
-            </div>
+  return (
+    <div className="w-full px-6 py-8 lg:px-8">
+      <div className="mb-5">
+        <p className="text-2xl font-semibold text-slate-900">All Appointments</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Review upcoming visits, update statuses, and inspect urgent handoff details.
+        </p>
+      </div>
 
-            {/* Age */}
-            <p className="max-sm:hidden">
-              {calculateAge(item?.userData?.dob)}
-            </p>
+      <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full table-fixed">
+            <thead className="bg-slate-50">
+              <tr className="border-b border-slate-200 text-left text-sm font-semibold text-slate-600">
+                <th className="w-16 px-4 py-4">#</th>
+                <th className="w-72 px-4 py-4">Patient</th>
+                <th className="w-28 px-4 py-4">Payment</th>
+                <th className="w-20 px-4 py-4">Age</th>
+                <th className="w-56 px-4 py-4">Date & Time</th>
+                <th className="w-24 px-4 py-4">Fees</th>
+                <th className="w-36 px-4 py-4">Status</th>
+                <th className="w-36 px-4 py-4">Action</th>
+              </tr>
+            </thead>
 
-            {/* Date */}
-            <p>
-              {slotDateFormat(item?.slotDate)} ,{" "}
-              {item?.slotTime}
-            </p>
+            <tbody>
+              {appointments.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="px-4 py-16 text-center text-sm text-slate-500"
+                  >
+                    No appointments yet.
+                  </td>
+                </tr>
+              ) : (
+                appointments.map((item, index) => (
+                    <tr
+                      key={item._id || index}
+                      className="border-b border-slate-200 align-top text-sm text-slate-600"
+                    >
+                      <td className="px-4 py-5 font-medium text-slate-700">
+                        {index + 1}
+                      </td>
 
-            {/* Fees */}
-            <p>
-              {currency}
-              {item?.amount}
-            </p>
+                      <td className="px-4 py-5">
+                        <div className="flex items-center gap-3">
+                          <img
+                            className="h-11 w-11 flex-none rounded-full object-cover ring-1 ring-slate-200"
+                            src={item?.userData?.image}
+                            alt={item?.userData?.name || "Patient"}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900">
+                              {item?.userData?.name}
+                            </p>
+                            <p className="truncate text-xs text-slate-500">
+                              {item?.userData?.relation
+                                ? `${item.userData.relation} • ${item?.userData?.gender || "Patient"}`
+                                : item?.userData?.gender || "Patient"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
+                      <td className="px-4 py-5">
+                        <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+                          {item.payment ? "Online" : "Cash"}
+                        </span>
+                      </td>
 
-              {/* Cancelled */}
-              {item.cancelled && (
-                <p className="text-red-400 text-xs font-medium">
-                  Cancelled
-                </p>
+                      <td className="px-4 py-5">
+                        {calculateAge(item?.userData?.dob)}
+                      </td>
+
+                      <td className="px-4 py-5">
+                        <p className="font-medium text-slate-800">
+                          {slotDateFormat(item?.slotDate)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item?.slotTime}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-5 font-semibold text-slate-900">
+                        {currency}
+                        {item?.amount}
+                      </td>
+
+                      <td className="px-4 py-5">{renderStatus(item)}</td>
+
+                      <td className="px-4 py-5">{renderActions(item)}</td>
+                    </tr>
+                ))
               )}
-
-              {/* Completed */}
-              {item.isCompleted && (
-                <p className="text-green-500 text-xs font-medium">
-                  Completed
-                </p>
-              )}
-              
-              {item.cancelled && item.cancelledBy === "doctor" && (
-  <p className="text-red-500 text-xs font-medium">
-    Cancelled by Doctor (Refund)
-  </p>
-)}
-
-              {/* Active buttons */}
-              {!item.cancelled && !item.isCompleted && (
-                <>
-                  <img
-                    onClick={() =>
-                      cancelAppointment(item?._id)
-                    }
-                    className="w-8 cursor-pointer hover:scale-110 transition"
-                    src={assets.cancel_icon}
-                    alt=""
-                  />
-                  <img
-                    onClick={() =>
-                      completeAppointment(item?._id)
-                    }
-                    className="w-8 cursor-pointer hover:scale-110 transition"
-                    src={assets.tick_icon}
-                    alt=""
-                  />
-                </>
-              )}
-
-              {/* ✅ DELETE BUTTON */}
-              {(item.cancelled || item.isCompleted) && (
-                <button
-                  onClick={() =>
-                    deleteAppointment(item._id)
-                  }
-                  className="text-red-500 hover:bg-red-500 hover:text-white p-2 rounded transition"
-                  title="Delete Appointment"
-                >
-                  🗑
-                </button>
-              )}
-
-            </div>
-          </div>
-        ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

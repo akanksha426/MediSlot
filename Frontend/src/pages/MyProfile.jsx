@@ -5,6 +5,15 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import MoveUpOnRender from "../components/MoveUpOnRender";
 
+const createEmptyFamilyMember = () => ({
+  id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+  name: "",
+  relation: "",
+  gender: "Male",
+  dob: "",
+  phone: "",
+});
+
 const MyProfile = () => {
   const { backendUrl, token, userData, setUserData, loadUserProfileData } = useContext(AppContext);
 
@@ -21,6 +30,10 @@ const MyProfile = () => {
       formData.append("address", JSON.stringify(userData.address));
       formData.append("gender", userData.gender);
       formData.append("dob", userData.dob);
+      formData.append(
+        "familyMembers",
+        JSON.stringify(userData.familyMembers || [])
+      );
 
       if (image) formData.append("image", image);
 
@@ -32,7 +45,14 @@ const MyProfile = () => {
 
       if (data.success) {
         toast.success(data.message);
-        loadUserProfileData();
+        setUserData({
+          ...data.userData,
+          address: data.userData?.address || { line1: "", line2: "" },
+          familyMembers: Array.isArray(data.userData?.familyMembers)
+            ? data.userData.familyMembers
+            : [],
+        });
+        await loadUserProfileData();
         setEdit(false);
         setImage(null);
       } else {
@@ -184,6 +204,199 @@ const MyProfile = () => {
                   <p className="text-gray-700">{userData.dob}</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-gray-700">Family Care Desk</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Save family profiles so you can book for parents, children, or partner from one account.
+                </p>
+              </div>
+
+              {isEdit && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setUserData((prev) => ({
+                      ...prev,
+                      familyMembers: [
+                        ...(prev.familyMembers || []),
+                        createEmptyFamilyMember(),
+                      ],
+                    }))
+                  }
+                  className="rounded-lg border border-black px-4 py-2 text-sm text-black transition hover:bg-black hover:text-white"
+                >
+                  Add Member
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {(userData.familyMembers || []).length > 0 ? (
+                (userData.familyMembers || []).map((member, index) => (
+                  <div
+                    key={member.id || index}
+                    className="rounded-xl border border-white bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-gray-800">
+                          {member.name || `Family member ${index + 1}`}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {member.relation || "Relation not set"}
+                        </p>
+                      </div>
+
+                      {isEdit && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).filter(
+                                (_, memberIndex) => memberIndex !== index
+                              ),
+                            }))
+                          }
+                          className="text-sm text-red-500 transition hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    {isEdit ? (
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <input
+                          className="w-full rounded-lg border p-2"
+                          placeholder="Name"
+                          value={member.name || ""}
+                          onChange={(e) =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).map(
+                                (currentMember, memberIndex) =>
+                                  memberIndex === index
+                                    ? {
+                                        ...currentMember,
+                                        name: e.target.value,
+                                      }
+                                    : currentMember
+                              ),
+                            }))
+                          }
+                        />
+                        <input
+                          className="w-full rounded-lg border p-2"
+                          placeholder="Relation"
+                          value={member.relation || ""}
+                          onChange={(e) =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).map(
+                                (currentMember, memberIndex) =>
+                                  memberIndex === index
+                                    ? {
+                                        ...currentMember,
+                                        relation: e.target.value,
+                                      }
+                                    : currentMember
+                              ),
+                            }))
+                          }
+                        />
+                        <select
+                          className="w-full rounded-lg border p-2"
+                          value={member.gender || "Male"}
+                          onChange={(e) =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).map(
+                                (currentMember, memberIndex) =>
+                                  memberIndex === index
+                                    ? {
+                                        ...currentMember,
+                                        gender: e.target.value,
+                                      }
+                                    : currentMember
+                              ),
+                            }))
+                          }
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                        </select>
+                        <input
+                          type="date"
+                          className="w-full rounded-lg border p-2"
+                          value={member.dob || ""}
+                          onChange={(e) =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).map(
+                                (currentMember, memberIndex) =>
+                                  memberIndex === index
+                                    ? {
+                                        ...currentMember,
+                                        dob: e.target.value,
+                                      }
+                                    : currentMember
+                              ),
+                            }))
+                          }
+                        />
+                        <input
+                          className="w-full rounded-lg border p-2 md:col-span-2"
+                          placeholder="Phone"
+                          value={member.phone || ""}
+                          onChange={(e) =>
+                            setUserData((prev) => ({
+                              ...prev,
+                              familyMembers: (prev.familyMembers || []).map(
+                                (currentMember, memberIndex) =>
+                                  memberIndex === index
+                                    ? {
+                                        ...currentMember,
+                                        phone: e.target.value,
+                                      }
+                                    : currentMember
+                              ),
+                            }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div className="mt-3 grid gap-3 text-sm text-gray-600 md:grid-cols-2">
+                        <p>
+                          <span className="font-medium text-gray-700">Relation:</span>{" "}
+                          {member.relation || "Not set"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-700">Gender:</span>{" "}
+                          {member.gender || "Not set"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-700">DOB:</span>{" "}
+                          {member.dob || "Not set"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-700">Phone:</span>{" "}
+                          {member.phone || "Not set"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500">
+                  No family members saved yet. Add a parent, child, spouse, or dependent to book for them quickly.
+                </div>
+              )}
             </div>
           </div>
 

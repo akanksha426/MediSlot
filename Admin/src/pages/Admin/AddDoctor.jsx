@@ -14,12 +14,15 @@ const initialValues = {
   about: "",
   speciality: "General physician",
   degree: "",
+  registrationNumber: "",
   address1: "",
   address2: "",
+  city: "",           // 👈 added
 };
 
 const AddDoctor = () => {
   const [docImg, setDocImg] = useState(false);
+  const [licenseDocument, setLicenseDocument] = useState(false);
   const [doctorData, setDoctorData] = useState(initialValues);
 
   const { backendUrl, aToken } = useContext(AdminContext);
@@ -40,8 +43,13 @@ const AddDoctor = () => {
         return toast.error("Image not selected");
       }
 
+      if (!licenseDocument) {
+        return toast.error("License proof document not selected");
+      }
+
       const formData = new FormData();
       formData.append("image", docImg);
+      formData.append("licenseDocument", licenseDocument);
       formData.append("name", doctorData.name);
       formData.append("email", doctorData.email);
       formData.append("password", doctorData.password);
@@ -50,6 +58,8 @@ const AddDoctor = () => {
       formData.append("about", doctorData.about);
       formData.append("speciality", doctorData.speciality);
       formData.append("degree", doctorData.degree);
+      formData.append("registrationNumber", doctorData.registrationNumber);
+      formData.append("city", doctorData.city);   // 👈 added
       formData.append(
         "address",
         JSON.stringify({
@@ -67,6 +77,7 @@ const AddDoctor = () => {
       if (data.success) {
         toast.success(data.message);
         setDocImg(null);
+        setLicenseDocument(null);
         setDoctorData(initialValues);
       } else {
         toast.error(data.message);
@@ -116,6 +127,33 @@ const AddDoctor = () => {
               </div>
             </div>
 
+            <div className="mb-10 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-gray-700">Medical license proof</p>
+                  <p className="text-sm text-gray-400">Upload registration certificate, license PDF, or image</p>
+                  {licenseDocument && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Selected: {licenseDocument.name}
+                    </p>
+                  )}
+                </div>
+                <label
+                  htmlFor="license-document"
+                  className="w-fit cursor-pointer rounded-lg bg-gray-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
+                >
+                  Choose document
+                </label>
+                <input
+                  onChange={(e) => setLicenseDocument(e.target.files[0])}
+                  type="file"
+                  id="license-document"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  hidden
+                />
+              </div>
+            </div>
+
             {/* Form Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -143,8 +181,10 @@ const AddDoctor = () => {
               </Select>
 
               <Input label="Education" name="degree" value={doctorData.degree} onChange={handleInputChange} />
+              <Input label="Medical Registration Number" name="registrationNumber" value={doctorData.registrationNumber} onChange={handleInputChange} />
               <Input label="Address Line 1" name="address1" value={doctorData.address1} onChange={handleInputChange} />
               <Input label="Address Line 2" name="address2" value={doctorData.address2} onChange={handleInputChange} />
+              <Input label="City" name="city" placeholder="e.g. Lucknow" value={doctorData.city} onChange={handleInputChange} />  {/* 👈 added */}
 
             </div>
 

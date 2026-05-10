@@ -1,119 +1,153 @@
 import axios from "axios";
-import { createContext, useState } from "react";
+import { createContext, useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
 export const DoctorContext = createContext();
 
 const DoctorContextProvider = (props) => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
+
   const [dToken, setDToken] = useState(
-    localStorage.getItem("dToken") ? localStorage.getItem("dToken") : ""
+    localStorage.getItem("dToken") || ""
   );
+
+  const [doctorId, setDoctorId] = useState("");
   const [appointments, setAppointments] = useState([]);
   const [dashData, setDashData] = useState([]);
-  const [profileData, setProfileData] = useState(false);
+  const [profileData, setProfileData] = useState(null);
 
+  // 🔥 AUTO CLEAR WHEN TOKEN REMOVED
+  useEffect(() => {
+    if (!dToken) {
+      setAppointments([]);
+      setProfileData(null);
+      setDoctorId("");
+    }
+  }, [dToken]);
+
+  // ================= GET APPOINTMENTS =================
   const getAppointments = async () => {
     try {
       const { data } = await axios.get(
         backendUrl + "/api/doctor/appointments",
-        {
-          headers: { dToken },
-        }
+        { headers: { dToken } }
       );
+
       if (data.success) {
         setAppointments(data.appointments.reverse());
       } else {
         toast.error(data.message);
       }
     } catch (error) {
-      console.log("error:", error);
-      toast.error(error);
+      toast.error("Failed to fetch appointments");
     }
   };
 
+  // ================= COMPLETE APPOINTMENT =================
   const completeAppointment = async (appointmentId) => {
-    console.log("appointmentId:", appointmentId);
     try {
       const { data } = await axios.post(
         backendUrl + "/api/doctor/complete-appointment",
         { appointmentId },
         { headers: { dToken } }
       );
-      console.log("data:", data);
-      if (data.success) {
-        console.log("data:", data);
-        getAppointments();
 
+      if (data.success) {
+        getAppointments();
         toast.success(data.message);
       } else {
         toast.error(data.message);
       }
     } catch (error) {
-      console.log("error:", error);
-      toast.error(error);
+      toast.error("Error completing appointment");
     }
   };
+
+  // ================= CANCEL APPOINTMENT =================
   const cancelAppointment = async (appointmentId) => {
-  try {
-    const confirmCancel = window.confirm(
-      "Cancel appointment?\nPatient will get full refund."
-    );
+    try {
+      const confirmCancel = window.confirm(
+        "Cancel appointment?\nPatient will get full refund."
+      );
 
-    if (!confirmCancel) return;
+      if (!confirmCancel) return;
 
-    const { data } = await axios.post(
-      backendUrl + "/api/doctor/cancel-appointment",
-      { appointmentId },
-      { headers: { dToken } }
-    );
+      const { data } = await axios.post(
+        backendUrl + "/api/doctor/cancel-appointment",
+        { appointmentId },
+        { headers: { dToken } }
+      );
 
-    if (data.success) {
-      toast.success(data.message);
-      getAppointments();
-    } else {
-      toast.error(data.message);
+      if (data.success) {
+        toast.success(data.message);
+        getAppointments();
+      } else {
+        toast.error(data.message);
+      }
+
+    } catch (error) {
+      toast.error("Cancel failed");
     }
+  };
 
-  } catch (error) {
-    toast.error("Cancel failed");
-  }
-};
-
+  // ================= DASHBOARD =================
   const getDashData = async () => {
     try {
-      const { data } = await axios.get(backendUrl + "/api/doctor/dashboard", {
-        headers: { dToken },
-      });
+      const { data } = await axios.get(
+        backendUrl + "/api/doctor/dashboard",
+        { headers: { dToken } }
+      );
+
       if (data.success) {
         setDashData(data.dashData);
       } else {
         toast.error(data.message);
       }
     } catch (error) {
-      console.log("error:", error);
-      toast.error(error);
+      toast.error("Dashboard error");
     }
   };
 
+  // ================= PROFILE =================
   const getProfileData = async () => {
     try {
-      const { data } = await axios.get(backendUrl + "/api/doctor/profile", {
-        headers: { dToken },
-      });
+      const { data } = await axios.get(
+        backendUrl + "/api/doctor/profile",
+        { headers: { dToken } }
+      );
+
       if (data.success) {
         setProfileData(data.profileData);
-        console.log("data:", data);
+
+        // 🔥 IMPORTANT
+        setDoctorId(data.profileData._id);
+
       } else {
         toast.error(data.message);
       }
     } catch (error) {
-      console.log("error:", error);
-      toast.error(error);
+      toast.error("Profile error");
     }
   };
 
+  // ================= LOGOUT =================
+  const logoutDoctor = () => {
+    localStorage.removeItem("dToken");
+
+    // 🔥 CLEAR EVERYTHING
+    setDToken("");
+    setDoctorId("");
+    setAppointments([]);
+    setProfileData(null);
+    setDashData([]);
+
+    //Force Reset
+    window.location.replace("/login");
+  };
+
+ 
   const value = {
+    doctorId,
     dToken,
     setDToken,
     backendUrl,
@@ -124,8 +158,9 @@ const DoctorContextProvider = (props) => {
     dashData,
     getDashData,
     profileData,
-    setProfileData,
     getProfileData,
+    logoutDoctor,
+    setProfileData 
   };
 
   return (

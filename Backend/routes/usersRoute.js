@@ -1,8 +1,9 @@
 import express from "express";
-
+const userRouter = express.Router();
 import {
   registerUser,
   loginUser,
+  resetPassword,
   getProfile,
   updateProfile,
   bookAppointment,
@@ -15,10 +16,14 @@ import authUser from "../middlewares/authUser.js";
 import upload from "../middlewares/multer.js";
 import { mockPayment } from "../controllers/userController.js";
 import { deleteAppointment } from "../controllers/userController.js";
-const userRouter = express.Router();
+import { submitRating } from "../controllers/doctorController.js"  // 👈 add import
+
+userRouter.post("/rate-doctor", authUser, submitRating)             // 👈 add route
+
 
 userRouter.post("/register", registerUser);
 userRouter.post("/login", loginUser);
+userRouter.post("/reset-password", resetPassword);
 userRouter.get("/get-profile", authUser, getProfile);
 userRouter.post(
   "/update-profile",

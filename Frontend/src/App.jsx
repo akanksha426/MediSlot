@@ -15,7 +15,7 @@ import { useContext, useEffect } from "react";
 import { AppContext } from "./context/AppContext";
 import axios from "axios";
 import TopLoadingBar from "./components/TopLoadingBar";
-
+const uToken = localStorage.getItem("uToken");
 const App = () => {
   const { isLoading, setIsLoading } = useContext(AppContext);
 
@@ -44,3 +44,70 @@ const App = () => {
 };
 
 export default App;
+//////////////////////////////
+// import { Route, Routes } from "react-router-dom";
+// import { ToastContainer } from "react-toastify";
+// import "react-toastify/dist/ReactToastify.css";
+// import Home from "./pages/Home";
+// import Doctors from "./pages/Doctors";
+// import Login from "./pages/Login";
+// import About from "./pages/About";
+// import MyProfile from "./pages/MyProfile";
+// import MyAppointments from "./pages/MyAppointments";
+// import Appointment from "./pages/Appointment";
+// import Navbar from "./components/Navbar";
+// import Contact from "./pages/Contact";
+// import Footer from "./components/Footer";
+// import { useContext, useEffect, useState } from "react";
+// import { AppContext } from "./context/AppContext";
+// import TopLoadingBar from "./components/TopLoadingBar";
+
+// const App = () => {
+//   const { isLoading } = useContext(AppContext);
+
+//   // ✅ FIX: reactive token
+//   const [uToken, setUToken] = useState(localStorage.getItem("uToken"));
+
+//   useEffect(() => {
+//     setUToken(localStorage.getItem("uToken"));
+//   }, []);
+
+//   return (
+//     <>
+//       {isLoading && <TopLoadingBar message="Loading ..." />}
+//       <div className="mx-4 sm:mx-[10%]">
+//         <Navbar />
+
+//         <Routes>
+//           <Route path="/" element={<Home />} />
+//           <Route path="/doctors" element={<Doctors />} />
+//           <Route path="/doctors/:speciality" element={<Doctors />} />
+//           <Route path="/login" element={<Login />} />
+//           <Route path="/about" element={<About />} />
+//           <Route path="/contact" element={<Contact />} />
+
+//           {/* 🔒 Protected Routes */}
+//           <Route
+//             path="/my-profile"
+//             element={uToken ? <MyProfile /> : <Login />}
+//           />
+//           <Route
+//             path="/my-appointments"
+//             element={uToken ? <MyAppointments /> : <Login />}
+//           />
+//           <Route
+//             path="/appointment/:docId"
+//             element={uToken ? <Appointment /> : <Login />}
+//           />
+
+//           <Route path="*" element={<div>Not found</div>} />
+//         </Routes>
+
+//         <Footer />
+//         <ToastContainer />
+//       </div>
+//     </>
+//   );
+// };
+
+// export default App;

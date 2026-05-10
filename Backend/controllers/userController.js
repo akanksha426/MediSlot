@@ -9,6 +9,54 @@ import appointmentModel from "../models/appointmentModel.js";
 import razorpay from "razorpay";
 // API for register user
 
+const timeToMinutes = (time) => {
+  if (!time) return null;
+
+  const normalized = String(time).trim();
+  const meridiemMatch = normalized.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
+
+  if (meridiemMatch) {
+    let hours = Number(meridiemMatch[1]);
+    const minutes = Number(meridiemMatch[2]);
+    const meridiem = meridiemMatch[3].toUpperCase();
+
+    if (meridiem === "PM" && hours !== 12) hours += 12;
+    if (meridiem === "AM" && hours === 12) hours = 0;
+
+    return hours * 60 + minutes;
+  }
+
+  const [hours, minutes] = normalized.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const isSlotInsideDoctorSchedule = (docData, slotDate, slotTime) => {
+  const [day, month, year] = slotDate.split("_").map(Number);
+  const appointmentDate = new Date(year, month - 1, day);
+  const daySchedule = docData.weeklySchedule?.find(
+    (item) => Number(item.day) === appointmentDate.getDay()
+  );
+
+  if (!daySchedule?.isOpen) return false;
+
+  const requestedMinutes = timeToMinutes(slotTime);
+  const startMinutes = timeToMinutes(daySchedule.startTime);
+  const endMinutes = timeToMinutes(daySchedule.endTime);
+  const slotDuration = Number(daySchedule.slotDuration || 30);
+
+  if (
+    requestedMinutes === null ||
+    startMinutes === null ||
+    endMinutes === null ||
+    requestedMinutes < startMinutes ||
+    requestedMinutes >= endMinutes
+  ) {
+    return false;
+  }
+
+  return (requestedMinutes - startMinutes) % slotDuration === 0;
+};
+
 const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -88,6 +136,41 @@ const loginUser = async (req, res) => {
   }
 };
 
+// API for user password reset
+const resetPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.json({ success: false, message: "Email and new password are required" });
+    }
+
+    if (!validator.isEmail(email)) {
+      return res.json({ success: false, message: "Enter a valid email" });
+    }
+
+    if (newPassword.length < 8) {
+      return res.json({ success: false, message: "Enter a strong password" });
+    }
+
+    const user = await userModel.findOne({ email });
+
+    if (!user) {
+      return res.json({ success: false, message: "User does not exist" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (error) {
+    console.log("error:", error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 //API to get user profile data
 
 const getProfile = async (req, res) => {
@@ -107,7 +190,7 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { userId, name, phone, address, dob, gender } = req.body;
+    const { userId, name, phone, address, dob, gender, familyMembers } = req.body;
 
     const imageFile = req.file;
 
@@ -121,6 +204,7 @@ const updateProfile = async (req, res) => {
       address: JSON.parse(address),
       dob,
       gender,
+      familyMembers: familyMembers ? JSON.parse(familyMembers) : [],
     });
 
     if (imageFile) {
@@ -134,7 +218,13 @@ const updateProfile = async (req, res) => {
       await userModel.findByIdAndUpdate(userId, { image: imageURL });
     }
 
-    res.json({ success: true, message: "Profile Updated" });
+    const updatedUserData = await userModel.findById(userId).select("-password");
+
+    res.json({
+      success: true,
+      message: "Profile Updated",
+      userData: updatedUserData,
+    });
   } catch (error) {
     console.log("error:", error);
     res.json({ success: false, message: error.message });
@@ -145,11 +235,22 @@ const updateProfile = async (req, res) => {
 
 const bookAppointment = async (req, res) => {
   try {
-    const { userId, docId, slotDate, slotTime } = req.body;
+    const { userId, docId, slotDate, slotTime, patientProfile } = req.body;
     const docData = await doctorModel.findById(docId).select("-password");
+
+    if (docData.verificationStatus !== "verified") {
+      return res.json({ success: false, message: "Doctor is not verified yet" });
+    }
 
     if (!docData.available) {
       return res.json({ success: false, message: "Doctor is not availble " });
+    }
+
+    if (!isSlotInsideDoctorSchedule(docData, slotDate, slotTime)) {
+      return res.json({
+        success: false,
+        message: "Selected slot is outside doctor's schedule",
+      });
     }
 
     let slots_booked = docData.slots_booked;
@@ -169,7 +270,18 @@ const bookAppointment = async (req, res) => {
       slots_booked[slotDate].push(slotTime);
     }
 
-    const userData = await userModel.findById(userId).select("-password");
+    const accountUserData = await userModel.findById(userId).select("-password");
+    const sanitizedPatientProfile = patientProfile
+      ? {
+          name: patientProfile.name || accountUserData.name,
+          phone: patientProfile.phone || accountUserData.phone,
+          gender: patientProfile.gender || accountUserData.gender,
+          dob: patientProfile.dob || accountUserData.dob,
+          relation: patientProfile.relation || "Self",
+          image: patientProfile.image || accountUserData.image,
+        }
+      : null;
+    const userData = sanitizedPatientProfile || accountUserData;
 
     delete docData.slots_booked;
 
@@ -262,8 +374,23 @@ const cancelAppointment = async (req, res) => {
       return res.json({ success: false, message: "Unauthorized" });
     }
 
+    if (appointmentData.cancelled) {
+      return res.json({ success: false, message: "Appointment already cancelled" });
+    }
+
+    if (appointmentData.isCompleted) {
+      return res.json({
+        success: false,
+        message: "Completed appointments cannot be cancelled",
+      });
+    }
+
     //  mark cancelled + refund
-    let updateData = { cancelled: true };
+    let updateData = {
+      cancelled: true,
+      cancelledBy: "user",
+      notification: "Appointment cancelled by patient.",
+    };
 
     if (appointmentData.payment) {
       updateData.refund = true;
@@ -400,6 +527,7 @@ const mockPayment = async (req, res) => {
 export {
   registerUser,
   loginUser,
+  resetPassword,
   getProfile,
   updateProfile,
   bookAppointment,
